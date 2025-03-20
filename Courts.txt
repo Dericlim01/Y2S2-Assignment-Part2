@@ -1,0 +1,4 @@
+  C001, Progression Court, 750, Entry: I/K, Exit: J/L
+  C002, Championship Court, 1000, Entry: E/G, Exit: F/H
+  C003, Center Court, 1500, Entry: A/C, Exit: B/D
+  
