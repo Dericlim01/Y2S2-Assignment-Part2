@@ -1,5 +1,0 @@
-R001, First Round
-R002, Second Round
-R003, Quarterfinals
-R004, Semifinals
-R005, Finals

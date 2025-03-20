@@ -1,3 +1,0 @@
-S001, Knockout Rounds
-S002, Round Robin
-S003, Qualifiers
