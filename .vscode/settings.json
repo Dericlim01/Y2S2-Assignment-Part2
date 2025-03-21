@@ -1,0 +1,7 @@
+{
+    "files.associations": {
+        "xutility": "cpp",
+        "iterator": "cpp"
+    },
+    "C_Cpp.errorSquiggles": "disabled"
+}
