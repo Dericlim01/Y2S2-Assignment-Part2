@@ -335,7 +335,7 @@ void addtoSalesRecord (Spectator* spectator, const string& status) {
     // Formatting the datetime
     strftime(buffer, sizeof(buffer), "%d-%m-%Y %H:%M:%S", timeinfo);
     newRecord->purchasedDateTime = string(buffer);
-    newRecord->status = status; // Set the status (Purchased or Cancelled)
+    newRecord->status = status; // Set the status (Purchased or Rejected)
     newRecord->next = salesRecordList; // Insert at the head of the list
     salesRecordList = newRecord;
     salesCounter++;
@@ -416,7 +416,124 @@ void purchaseTickets (int& ticketCounter) {
     Match* current = matches;
     int index = 1;
     while (current != nullptr) {
-        cout << index << ". MatchID: " << current->matchID << ", StageID" << current->stage
+        cout << index << ". MatchID: " << current->matchID << ", StageID:" << current->stage << ", Round: " << current->round << ", Scheduled: " << current->dateTime << ", Status: " << current->matchStatus << ", Court: " << current->courtID << "\n";
+        current = current->next;
+        index++;
     }
+
+    // Get the user's match selection
+    int matchChoice;
+    cout << "Enter your choice (1-" << matchCount << "): ";
+    cin >> matchChoice;
+    while (matchChoice < 1 || matchChoice > matchCount) {
+        cout << "Invalid choice! Enter again (1-" << matchCount << "): ";
+        cin >> matchChoice;
+    }
+
+    // Get the selected match details
+    current = matches;
+    for (int i = 1; i < matchChoice; i++) {
+        current = current->next;
+    }
+    matchID = current->matchID;
+    courtID = current->courtID;
+    dateTime = current->dateTime;
+
+    // Get the number of tickets to purchase
+    cout << "Enter number of tickets to purchase: ";
+    cin >> seatsQuantity;
+    // Validate the quantity
+    while (seatsQuantity <= 0) {
+        cout << "Invalid quantity! Enter a positive number: ";
+        cin >> seatsQuantity;
+    }
+
+    // Generate a unique TicketID e.g. T001, T002
+    string ticketID = "T" + string(3 - to_string(ticketCounter).length(), '0') + to_string(ticketCounter);
+    ticketCounter++;
+
+    // Create a new spectator and add to the Priority Queue
+    Spectator* spectator = new Spectator{name, ticketType, 0, ticketID, courtID, seatsQuantity, nullptr, matchID, dateTime};
+    spectator->priority = getPriority(spectator->ticketType);
+    enqueuePriorityQueue(spectator);
+
+    // Process ticket sales by Priority Queue
+    while (!isPriorityQueueEmpty()) {
+        // To get the highest priority spectator
+        Spectator* s = dequeuePriorityQueue();
+        // Now check the court capacity
+        int courtCapacity = getCourtCapacity(s->courtID); 
+        // If enough capacity
+        if (courtCapacity >= s->seatsQuantity) {
+            // Display the ticket purchase details
+            cout << "Ticket purchased: " << s->ticketID << ", " << s->name << ", " << s->ticketType << ", Court: " << s->courtID << ", Match: " << s->matchID << ", DateTime: " << s->dateTime << ", Seats: " << s->seatsQuantity << "\n";
+            // Update court capacity
+            updateCourtCapacity(s->courtID, s->seatsQuantity, true);
+            // Add the spectator list for searching
+            addToSpectatorList(s);
+            // Record once done purchasing
+            addtoSalesRecord(s, "Purchased");
+        }
+        // Prompt if the capacity is exceeded
+        else {
+            cout << "Court capacity exceeded. Cannot sell ticket to " << s->name << " on court " << s->courtID << "\n";
+            // Record when rejected to sale the ticket
+            addtoSalesRecord(s, "Rejected");
+            // Free the spectator memory
+            delete s;
+        }
+
+    }
+
+    // Clean up the matches linked list
+    while (matches != nullptr) {
+        Match* temp = matches;
+        matches = matches->next;
+        delete temp;
+    }
+
+} 
+
+// Function to handle court entry through different gates
+void courtEntryGate (GateStack* gateStacks, char* gateNames, int& entryGateIndex) {
+    string ticketID;
+    cout << "Please insert yout ticketID to enter the court: ";
+    cin.ignore();
+    getline(cin, ticketID);
+
+    // Search for the spectator by ticketID
+    Spectator* spectator = searchByTicketID(ticketID);
+    // If the ticketID is not found
+    if (spectator == nullptr) {
+        cout << "ticketID " << ticketID << " not found!\n";
+        return;
+    }
+
+    // Handle the spectator's quantity and splitting to different gates if necessary
+    // Total seats to process
+    int remainingCapacity = spectator->seatsQuantity;
+    // Maximum seats per gate
+    int capacityPerGate = MAX_GATE_CAPACITY;
+    // Start with the current gate index
+    int currentGateIndex = entryGateIndex;
+    // Continue until reached the capacity of per gate
+    while (remainingCapacity > 0) {
+        // Select the next gate in cycle process
+        char gate = gateNames[currentGateIndex];
+        // Determine capacity for the gate
+        int capacityToAssign = min(remainingCapacity, capacityPerGate);
+        // Check if the gate can accmmodate spectators
+        if (gateStacks[currentGateIndex.size + capacityToAssign <= MAX_GATE_CAPACITY]) {
+            // Push spectator into the gate stack
+            gateStacks[currentGateIndex].push(spectator); 
+            cout << "Ticket buyer " << spectator.name << " enter through gate " << gate << " with " << capacityToAssign << " seats.\n";
+            // Reduce the remaining capacity
+            remainingCapacity -= capacityToAssign;
+            
+        }
+    }
+    
+    
 }
+
 
