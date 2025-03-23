@@ -2,7 +2,7 @@
 #include <string>
 #include <fstream>
 #include <ctime>
-
+#include <sstream>
 using namespace std;
 
 // Constants for Priority (used to integer value comparison)
@@ -12,7 +12,7 @@ const int GENERAL_PRIORITY = 1; // Lowest Priority
 
 // Constants for Gates
 const int MAX_GATE_CAPACITY = 20;
-const int NUM_GATES = 6; // For Gates A,B,C,D,E,F,G
+const int NUM_GATES = 6; // For Gates A,B,C,D,E,F
 
 // Structure for a Spectator
 struct Spectator {
@@ -40,7 +40,7 @@ Node* ticketQueueFront = nullptr; // Front of the Priority Queue
 // Insert new spectator value based on priority (adding people in order)
 void enqueuePriorityQueue (Spectator* spectator) {
     Node* newNode = new Node {spectator, nullptr}; // Make a newline to add new person
-    int spectatorPriority = spectator->priority; //Check priority of spectators
+    int spectatorPriority = spectator->priority; // Check priority of spectators
     // If the queue is empty or new spectator has higher priority
     // Line is empty 
     // OR
@@ -96,42 +96,6 @@ Spectator* searchByTicketID (const string& ticketID) {
     }
     return nullptr; // Return nullptr if not found
 }
-
-// Stack for Entry/Exit at Each Gate
-struct GateStack {
-    Node* top; // Top of the stack
-    int size; // Current number of spectators in the stack
-
-    GateStack () : top(nullptr), size(0) {} // Constructor to initialise an empty stack
-
-    // Function to push a spectator onto the stack
-    void push (Spectator* spectator) {
-        // Check if the gate capacity is reached
-        if (size >= MAX_GATE_CAPACITY) {
-            cout << "\nGate capacity reached. Please choose the next gate.";
-            return;
-        }
-        Node* newNode = new Node {spectator, nullptr}; // Create a New Node
-        newNode->next = top; // Push onto the stack
-        top = newNode;
-        size++; // Increment the size
-    }
-
-    // Pop the spectators from the stack
-    Spectator* pop () {
-        if (top == nullptr) return nullptr; // Return nullptr if the stack is empty
-        Node* temp = top;
-        Spectator* spectator = temp->spectator; // Store the top node
-        top = top->next; // Get the spectator
-        size--; // Decrement the size
-        delete temp; // Free the node memory
-        return spectator // Return the spectator
-    }
-
-    bool isEmpty () {
-        return top == nullptr; // Return true if the stack is empty
-    }
-};
 
 // Structure for Court Capacity Management
 struct Court {
@@ -494,46 +458,161 @@ void purchaseTickets (int& ticketCounter) {
 
 } 
 
-// Function to handle court entry through different gates
-void courtEntryGate (GateStack* gateStacks, char* gateNames, int& entryGateIndex) {
+// Sturcture for an Entry/Exit Process
+struct GateRequest {
     string ticketID;
-    cout << "Please insert yout ticketID to enter the court: ";
-    cin.ignore();
-    getline(cin, ticketID);
+    bool isEntry;
+    GateRequest* next;
+}
 
-    // Search for the spectator by ticketID
-    Spectator* spectator = searchByTicketID(ticketID);
-    // If the ticketID is not found
-    if (spectator == nullptr) {
-        cout << "ticketID " << ticketID << " not found!\n";
-        return;
+// Queue for Gate Requests (Entry or Exit)
+GateRequest* gateRequestFront = nullptr;
+GateRequest* gateRequestRear = nullptr;
+
+// Function to enqueue a gate request
+void enqueueGateRequest (const string& ticketID, bool isEntry) {
+    GateRequest* newRequest = new GateRequest{ticketID, isEntry, nullptr};
+    // Check if the queue is empty
+    if (gateRequestRear == nullptr) {
+        gateRequestFront = gateRequestRear = newRequest;
+    }
+    else {
+        gateRequestRear->next = newRequest;
+        gateRequestRear =newRequest;
+    }
+}
+
+// Function to dequeue a gate request
+GateRequest* dequeueGateRequest () {
+    // Check if the gate is empty
+    if (gateRequestFront == nullptr) {
+        return nullptr;
+    }
+    GateRequest* temp = gateRequestFront;
+    gateRequestFront = gateRequestFront->next;
+    // If the queue becomes empty
+    if (gateRequestFront == nullptr) {
+        gateRequestRear = nullptr; 
+    }
+    temp->next = nullptr;
+    return temp;
+}
+
+// Function to check if the gate request is empty
+bool isGateRequestQueueEmpty () {
+    return gateRequestFront == nullptr;
+}
+
+// Stack for Entry/Exit at Each Gate
+struct GateStack {
+    Node* top; // Top of the stack
+    int size; // Current number of spectators in the stack
+
+    GateStack () : top(nullptr), size(0) {} // Constructor to initialise an empty stack
+
+    // Function to push a spectator onto the stack
+    void push (Spectator* spectator) {
+        // Check if the gate capacity is reached
+        if (size >= MAX_GATE_CAPACITY) {
+            cout << "\nGate capacity reached. Please choose the next gate.";
+            return;
+        }
+        Node* newNode = new Node {spectator, nullptr}; // Create a New Node
+        newNode->next = top; // Push onto the stack
+        top = newNode;
+        size++; // Increment the size
     }
 
-    // Handle the spectator's quantity and splitting to different gates if necessary
-    // Total seats to process
-    int remainingCapacity = spectator->seatsQuantity;
-    // Maximum seats per gate
-    int capacityPerGate = MAX_GATE_CAPACITY;
-    // Start with the current gate index
-    int currentGateIndex = entryGateIndex;
-    // Continue until reached the capacity of per gate
-    while (remainingCapacity > 0) {
-        // Select the next gate in cycle process
-        char gate = gateNames[currentGateIndex];
-        // Determine capacity for the gate
-        int capacityToAssign = min(remainingCapacity, capacityPerGate);
-        // Check if the gate can accmmodate spectators
-        if (gateStacks[currentGateIndex.size + capacityToAssign <= MAX_GATE_CAPACITY]) {
-            // Push spectator into the gate stack
-            gateStacks[currentGateIndex].push(spectator); 
-            cout << "Ticket buyer " << spectator.name << " enter through gate " << gate << " with " << capacityToAssign << " seats.\n";
-            // Reduce the remaining capacity
-            remainingCapacity -= capacityToAssign;
-            
+    // Pop the spectators from the stack
+    Spectator* pop () {
+        if (top == nullptr) return nullptr; // Return nullptr if the stack is empty
+        Node* temp = top;
+        Spectator* spectator = temp->spectator; // Store the top node
+        top = top->next; // Get the spectator
+        size--; // Decrement the size
+        delete temp; // Free the node memory
+        return spectator // Return the spectator
+    }
+
+    bool isEmpty () {
+        return top == nullptr; // Return true if the stack is empty
+    }
+};
+
+// Function to handle court gates requests through different gates
+void processGateRequests (GateStack* gateStacks, char* gateNames, int& currentGateIndex) {
+    while (!isGateRequestQueueEmpty()) {
+        GateRequest* request = dequeueGateRequest();
+        if (request == nullptr) {
+            continue;
+        }
+
+        // Search for the spectator by ticketID
+        Spectator* spectator = searchByTicketID(request->ticketID);
+        // If the ticketID is not found
+        if (spectator == nullptr) {
+            cout << "TicketID " << request->ticketID << " is not found. \n";
+            delete request;
+            continue;
+        }
+
+        // Hanlde the spectators capacity, splitting across gates
+        // Total spectators to process
+        int remainingCapacity = spectator->seatsQuantity;
+        // Maximum capacity per gate
+        int capacityPerGate = MAX_GATE_CAPACITY;
+        // Start with the current gate index for current spectator
+        int tempGateIndex = currentGateIndex;
+
+        // Continue until all spectators are all assigned
+        while (remainingCapacity > 0) {
+            // Use the curren gate index
+            char gate = gateNames[tempGateIndex];
+            int capacityToAssign = min(remainingCapacity, capacityPerGate);
+
+            // Check if the gate can accommodate the spectators
+            if (gateStacks[tempGateIndex].size + capacityToAssign <= MAX_GATE_CAPACITY) {
+                // Push the spectator into the gate stack
+                gateStacks[tempGateIndex].push(spectator);
+
+                if (request->isEntry) {
+                    cout << "Ticket buyer " spectator->name << "enters through gate " << gate << "  with " << capacityToAssign << " capacity.\n";
+                }
+                else {
+                    cout << "Tickey buyer " << spectator->name << " exits through gate " << gate << " with " << capacityToAssign << "capacity.\n";
+                    // Update the court capacity
+                    updateCourtCapacity(spectator->courtID, capacityToAssign, false);
+                    // Pop the spectators from the stack
+                    gateStacks[tempGateIndex].pop();
+                }
+                // Reduce the remaining capacity
+                remainingCapacity -= capacityToAssign;
+                // Move to the next gate
+                tempGateIndex++;
+                if (tempGateIndex >= NUM_GATES) {
+                    cout << "Reached the last gate (Gate " << gateNames[NUM_GATES - 1] << "). Could not process remaining " << remainingCapacity << " capacity for " << spectator->name << ".\n";
+                    break;
+                }
+                
+            }
+            // If the gate cannot accommodate the capacity
+            else {
+                cout << "Gate " << gate << " cannot accommodate " << capacityToAssign << " capacity. Trying to next gate......\n";
+                // Move to the next gate
+                tempGateIndex++;
+                if (tempGateIndex >= NUM_GATES) {
+                    cout << "Reached the last gate (Gate " << gateNames[NUM_GATES - 1] << "). Could not process remaining " << remainingCapacity << " capacity for " << spectator->name << ".\n";
+                    break;
+                }
+            }
+            // Update the current gate index for the next spectator
+            currentGateIndex = tempGateIndex;
+            // Reset to the first gate
+            currentGateIndex = 0;
+            // Free the request memory
+            delete request;
         }
     }
-    
-    
 }
 
 
