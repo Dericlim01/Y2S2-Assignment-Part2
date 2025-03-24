@@ -7,6 +7,8 @@
 #include <string>
 #include <cstring>
 #include <stack>
+#include <limits>
+#include <algorithm>
 
 using namespace std;
 
@@ -69,22 +71,23 @@ class PlayerWithdrawals {
             withdrawalStack.push(newPlayer);
 
             cout << "Player " << name << " has been withdrawn. Reason: " << reason << endl;
+            cout << "========================================" << endl;
             saveToFile(withdrawalId, playerId, name, reason, currentTime);
         }
 
         // Display the withdrawn players
         void displayWithdrawals() {
-            cout << "Withdrawn Players:\n";
+            cout << "Withdrawn Players Summary:\n";
             stack<Player> temp = withdrawalStack;
             while (!temp.empty()) {
                 Player top = temp.top();
                 temp.pop();
-                cout << "Player ID: " << top.playerId
-                    << ", Name: " << top.name
-                    << ", Reason: " << top.reason
-                    << ", Time: " << top.time << endl;
+                cout << "Player ID : " << top.playerId
+                    << "\nName      : " << top.name
+                    << "\nReason    : " << top.reason
+                    << "\nTime      : " << top.time << endl;
             }
-            cout << endl;
+            cout << "========================================" << endl;
         }
 
         /**
@@ -142,33 +145,39 @@ map<string, string> readPlayersFromFile(const string& filename) {
  */
 bool checkUpcomingMatch(const string& playerId, const string& filename) {
     ifstream file(filename);
-    if (!file) return false;
+    if (!file) {
+        cout << "Error: Could not open Matches.txt\n";
+        return false;
+    }
 
     string line, matchId, stage, round, p1Id, p2Id, scheduledTime, matchStatus, courtId;
-    bool found = false;
 
-    // Read headers
-    if (getline(file, line)) {
-        while (getline(file, line)) {
-            stringstream ss(line);
-            getline(ss, matchId, ',');
-            getline(ss, stage, ',');
-            getline(ss, round, ',');
-            getline(ss, p1Id, ',');
-            getline(ss, p2Id, ',');
-            getline(ss, scheduledTime, ',');
-            getline(ss, matchStatus, ',');
-            getline(ss, courtId, ',');
+    while (getline(file, line)) {
+        stringstream ss(line);
+        getline(ss, matchId, ',');
+        getline(ss, stage, ',');
+        getline(ss, round, ',');
+        getline(ss, p1Id, ',');
+        getline(ss, p2Id, ',');
+        getline(ss, scheduledTime, ',');
+        getline(ss, matchStatus, ',');
+        getline(ss, courtId, ',');
 
-            // Check if the player is in a waiting match
-            if ((p1Id == playerId || p2Id == playerId) && matchStatus == "waiting") {
-                cout << "Player " << playerId << " has an upcoming match (" << matchId 
-                    << ") at " << scheduledTime << ".\n";
-                file.close();
-                return true;
-            }
+        if ((p1Id == playerId || p2Id == playerId) && matchStatus.compare("waiting") == 0) {
+            cout << "\n Match Found! Player needs substitution.\n";
+            cout << "================================================================================\n";
+            cout << "Match ID       : " << matchId << "\n";
+            cout << "Player 1 (P1)  : " << p1Id << "\n";
+            cout << "Player 2 (P2)  : " << p2Id << "\n";
+            cout << "Scheduled Time : " << scheduledTime << "\n";
+            cout << "Status         : " << matchStatus << "\n";
+            cout << "================================================================================\n";
+
+            file.close();
+            return true;
         }
     }
+    cout << "No upcoming match found for player.\n";
     file.close();
     return false;
 }
@@ -196,11 +205,6 @@ void substitutePlayer(const string& playerId, const string& matchesFile, const s
     string line, matchId, stage, round, p1Id, p2Id, scheduledTime, matchStatus, courtId;
     streampos lastPos = file.tellg(); // Store position for overwriting
 
-    // Read the header
-    if (getline(file, line)) {
-        cout << line << endl; // Optional: Display the header
-    }
-
     // Read and update match records
     while (file.tellg() != -1) {
         lastPos = file.tellg(); // Store position before reading the line
@@ -218,17 +222,27 @@ void substitutePlayer(const string& playerId, const string& matchesFile, const s
 
         // Check if the player needs substitution
         if ((p1Id == playerId || p2Id == playerId) && matchStatus == "waiting") {
-            cout << "Please enter a substitute player name for match " << matchId << ": ";
             string substituteName;
-            getline(cin, substituteName);
+            string substituteId;
 
-            // Find the substitute's player ID
-            auto it = players.find(substituteName);
-            if (it == players.end()) {
-                cout << "Player not found in Players.txt. Substitution failed.\n";
-                continue;
+            while (true) {
+                cout << "Please enter a substitute player name for match " << matchId << ": ";
+                getline(cin, substituteName);
+
+                // Find the substitute's player ID
+                auto it = players.find(substituteName);
+                if (it == players.end()) {
+                    cout << "Player not found in Players.txt. Substitution failed.\n";
+                    continue;
+                }
+
+                substituteId = it -> second;
+                if (substituteId == p1Id || substituteId == p2Id) {
+                    cout << "Invalid Player, Pls choose another player.\n";
+                    continue;
+                }
+                break;
             }
-            string substituteId = it->second;
 
             // Replace player ID
             if (p1Id == playerId) p1Id = substituteId;
@@ -257,9 +271,13 @@ void substitutePlayer(const string& playerId, const string& matchesFile, const s
  */
 void printAvailablePlayers(const map<string, string>& players) {
     cout << "Available Players:\n";
-    for (const auto& [name, id] :players) {
-        cout << "Player ID: " << id << ", Name: " << name << endl;
+    cout << "========================================\n";
+    cout << left << setw(15) << "Player ID" << "Name\n";
+    cout << "========================================\n";
+    for (const auto& [name, id] : players) {
+        cout << left << setw(15) << id << name << endl;
     }
+    cout << "========================================\n";
 }
 
 /**
@@ -276,6 +294,7 @@ void withdrawPlayer(PlayerWithdrawals &withdrawals) {
     cout << "Enter player name to withdraw: ";
     cin >> ws; // Remove leading whitespace
     getline(cin, name);
+    cout << "----------------------------------------" << endl;
 
     // Check if player exists
     if (players.find(name) == players.end()) {
@@ -287,6 +306,7 @@ void withdrawPlayer(PlayerWithdrawals &withdrawals) {
     // Enter reason for withdrawal
     cout << "Enter reason for withdrawal: ";
     getline(cin, reason);
+    cout << "----------------------------------------" << endl;
 
     withdrawals.withdraw(playerId, name, reason);
     withdrawals.displayWithdrawals();
@@ -530,7 +550,17 @@ int main() {
         cout << "2. Add a new player" << endl;
         cout << "3. Track player performance" << endl;
         cout << "Enter Choice: ";
+
         cin >> choice;
+
+        // Input validation
+        if (cin.fail()) {
+            cin.clear();
+            cin.ignore(numeric_limits<streamsize>::max(), '\n'); // Discard input
+            cout << "Invalid input. Please try again." << endl;
+            continue;
+        }
+
         switch (choice) {
             case 1:
                 withdrawPlayer(playerWithdrawals);

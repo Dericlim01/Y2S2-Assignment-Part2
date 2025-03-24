@@ -17,14 +17,14 @@ public:
         : runtime_error(message) {}
 };
 
-struct Court {
+struct Courts {
     string courtID;
     string courtType;
     int capacity;
     int maxConcurrentMatches;
 };
 
-class Player {
+class Players {
 public:
     string playerID;
     string name;
@@ -34,7 +34,7 @@ public:
     string stageID;
 };
 
-class Match {
+class Matches {
 public:
     string matchID;
     string stageID;
@@ -56,12 +56,12 @@ struct TimeSlot {
 
 class TournamentScheduler {
 private:
-    Court* courts;
+    Courts* courts;
     int courtsCount;
-    Match* matches;
+    Matches* matches;
     int matchesCount;
     int matchesCapacity;
-    Player* players;
+    Players* players;
     int playersCount;
     int playersCapacity;
     queue<TimeSlot>* courtSchedules;
@@ -94,7 +94,7 @@ private:
 
     void resizeMatchesArray() {
         int newCapacity = matchesCapacity == 0 ? 10 : matchesCapacity * 2;
-        Match* newMatches = new Match[newCapacity];
+        Matches* newMatches = new Matches[newCapacity];
         
         for (int i = 0; i < matchesCount; ++i) {
             newMatches[i] = matches[i];
@@ -107,7 +107,7 @@ private:
 
     void resizePlayersArray() {
         int newCapacity = playersCapacity == 0 ? 50 : playersCapacity * 2;
-        Player* newPlayers = new Player[newCapacity];
+        Players* newPlayers = new Players[newCapacity];
         
         for (int i = 0; i < playersCount; ++i) {
             newPlayers[i] = players[i];
@@ -149,7 +149,7 @@ private:
 
         playersCount = 0;
         playersCapacity = 50;
-        players = new Player[playersCapacity];
+        players = new Players[playersCapacity];
 
         string line;
         while (getline(playerFile, line)) {
@@ -158,7 +158,7 @@ private:
             }
 
             istringstream iss(line);
-            Player& player = players[playersCount];
+            Players& player = players[playersCount];
             
             getline(iss, player.playerID, ',');
             getline(iss, player.name, ',');
@@ -186,7 +186,7 @@ private:
             
             matchesCount = 0;
             matchesCapacity = 10;
-            matches = new Match[matchesCapacity];
+            matches = new Matches[matchesCapacity];
             
             initializeSchedules();
             
@@ -195,7 +195,7 @@ private:
 
         matchesCount = 0;
         matchesCapacity = 10;
-        matches = new Match[matchesCapacity];
+        matches = new Matches[matchesCapacity];
 
         string line;
         while (getline(matchFile, line)) {
@@ -204,7 +204,7 @@ private:
             }
 
             istringstream iss(line);
-            Match& match = matches[matchesCount];
+            Matches& match = matches[matchesCount];
             
             getline(iss, match.matchID, ',');
             getline(iss, match.stageID, ',');
@@ -225,7 +225,7 @@ private:
     
     void updateSchedulesFromMatches() {
         for (int i = 0; i < matchesCount; i++) {
-            Match& match = matches[i];
+            Matches& match = matches[i];
             
             if (match.scheduledTime == "TBD") {
                 continue;
@@ -323,7 +323,7 @@ private:
 
 public:
     TournamentScheduler() {
-        courts = new Court[3]{
+        courts = new Courts[3]{
             {"C001", "Center", 1500, 2},
             {"C002", "Championship", 1000, 1},
             {"C003", "Progression", 750, 1}
@@ -347,11 +347,11 @@ public:
             cerr << "Error loading data: " << e.what() << endl;
             playersCount = 0;
             playersCapacity = 10;
-            players = new Player[playersCapacity];
+            players = new Players[playersCapacity];
             
             matchesCount = 0;
             matchesCapacity = 10;
-            matches = new Match[matchesCapacity];
+            matches = new Matches[matchesCapacity];
             
             initializeSchedules();
         }
@@ -404,7 +404,7 @@ public:
                 }
             }
             
-            Player player1;
+            Players player1;
             bool player1Found = false;
             
             for (int i = 0; i < playersCount; ++i) {
@@ -427,7 +427,7 @@ public:
             string* availablePlayerIDs = new string[playersCount];
             
             for (int i = 0; i < playersCount; ++i) {
-                Player& potentialOpponent = players[i];
+                Players& potentialOpponent = players[i];
                 
                 if (potentialOpponent.playerID == p1ID || potentialOpponent.stageID != stageID) {
                     continue;
@@ -488,7 +488,7 @@ public:
                 resizeMatchesArray();
             }
 
-            Match& newMatch = matches[matchesCount];
+            Matches& newMatch = matches[matchesCount];
             
             stringstream ss;
             ss << "M" << setw(3) << setfill('0') << (matchesCount + 1);
@@ -536,7 +536,7 @@ public:
                 throw ValidationException("Player not found");
             }
             
-            Player& player = players[playerIndex];
+            Players& player = players[playerIndex];
             
             if (player.stageID == "S003") {
                 throw ValidationException("Player is already at the highest stage (Knockout)");
@@ -616,7 +616,7 @@ public:
         cout << string(84, '-') << endl;
         
         for (int i = 0; i < matchesCount; ++i) {
-            Match& match = matches[i];
+            Matches& match = matches[i];
             cout << left << setw(8) << match.matchID 
                  << setw(10) << match.stageID 
                  << setw(10) << match.roundID 
