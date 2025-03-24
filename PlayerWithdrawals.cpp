@@ -5,8 +5,42 @@
 #include <map>
 #include <iomanip>
 #include <string>
+#include <cstring>
+#include <stack>
 
 using namespace std;
+
+/**
+ * Generic function to generate a new ID.
+ * @param filename The file to read existing IDs from.
+ * @param prefix The prefix for the ID ("APUTCP" or "W").
+ * @param width The numeric part width (3 for "001").
+ * @param defaultStart The starting number if no ID is found.
+ * @return A new auto-incremented ID.
+ */
+string generateId(const string& filename, const string& prefix, int width, int defaultStart = 1) {
+    ifstream file(filename);
+    string lastId = "";
+    string line;
+    while(getline(file, line)) {
+        if(line.empty()) continue;
+        // Assume the ID is the first field (separated by a comma)
+        stringstream ss(line);
+        getline(ss, lastId, ',');
+    }
+    file.close();
+    
+    int num = defaultStart;
+    if(!lastId.empty()){
+        // Extract numeric part from lastId assuming it starts with prefix.
+        string numStr = lastId.substr(prefix.size());
+        num = stoi(numStr) + 1;
+    }
+    
+    stringstream ss;
+    ss << prefix << setfill('0') << setw(width) << num;
+    return ss.str();
+}
 
 // Structure for a Player
 struct Player {
@@ -20,45 +54,19 @@ struct Player {
 
 class PlayerWithdrawals {
     private:
-        Player* head;
-        int withdrawalCount;
+        stack<Player> withdrawalStack;
 
     public:
-        // Constructor to initialize the head
-        PlayerWithdrawals() : head(nullptr), withdrawalCount(getLastWithdrawalId()) {}
-
-        // Generate a withdrawal ID
-        string generateWithdrawalId() {
-            withdrawalCount++;
-            stringstream ss;
-            ss << "W" << setfill('0') << setw(3) << withdrawalCount;
-            return ss.str();
-        }
-
-        // Get the last withdrawal ID
-        int getLastWithdrawalId() {
-            ifstream file("Withdrawals.txt");
-            if (!file.is_open()) return 0;
-
-            string line, lastId;
-            while (getline(file, line)) {
-                stringstream ss(line);
-                getline(ss, lastId, ',');
-            }
-            file.close();
-            return lastId.empty() ? 0 : stoi(lastId.substr(1));
-        }
-
         /**
          * Withdraw a player
          * @param name the name of the player
          * @param reason the reason for withdrawal
          */
         void withdraw(string playerId, string name, string reason) {
-            string withdrawalId = generateWithdrawalId();
+            string withdrawalId = generateId("Withdrawals.txt", "W", 3);
             string currentTime = getCurrentTime();
-            Player* newPlayer = new Player{withdrawalId, playerId, name, reason, currentTime, head};
-            head = newPlayer;
+            Player newPlayer { withdrawalId, playerId, name, reason, currentTime, nullptr };
+            withdrawalStack.push(newPlayer);
 
             cout << "Player " << name << " has been withdrawn. Reason: " << reason << endl;
             saveToFile(withdrawalId, playerId, name, reason, currentTime);
@@ -67,26 +75,22 @@ class PlayerWithdrawals {
         // Display the withdrawn players
         void displayWithdrawals() {
             cout << "Withdrawn Players:\n";
-            Player* temp = head;
-            while (temp) {
-                cout << "Player ID: " << temp -> playerId << ", Name: " << temp -> name 
-                    << ", Reason: " << temp -> reason << ", Time: " << temp -> time << endl;
-                temp = temp -> next;
+            stack<Player> temp = withdrawalStack;
+            while (!temp.empty()) {
+                Player top = temp.top();
+                temp.pop();
+                cout << "Player ID: " << top.playerId
+                    << ", Name: " << top.name
+                    << ", Reason: " << top.reason
+                    << ", Time: " << top.time << endl;
             }
             cout << endl;
         }
 
-        // Destructor to free the memory
-        ~PlayerWithdrawals() {
-            while (head) {
-                Player* temp = head;
-                head = head -> next;
-                delete temp;
-            }
-        }
-
         /**
          * Save the player withdrawal to a file
+         * @param withdrawalId the ID of the withdrawal
+         * @param playerId the ID of the player
          * @param name the name of the player
          * @param reason the reason for withdrawal
          * @param time the time of withdrawal
@@ -109,6 +113,29 @@ class PlayerWithdrawals {
 };
 
 /**
+ * Read players from a file
+ * @param filename the name of the file
+ * @return a map of players
+ */
+map<string, string> readPlayersFromFile(const string& filename) {
+    ifstream file(filename);
+    map<string, string> players;
+    if (!file) return players;
+
+    // Read players from the file
+    string line;
+    while (getline(file, line)) {
+        stringstream ss(line);
+        string playerId, name;
+        getline(ss, playerId, ',');
+        getline(ss, name, ',');
+        players[name] = playerId;
+    }
+    file.close();
+    return players;
+}
+
+/**
  * Check for player upcoming matches
  * @param playerId the ID of the player
  * @param filename the name of the file
@@ -124,14 +151,14 @@ bool checkUpcomingMatch(const string& playerId, const string& filename) {
     if (getline(file, line)) {
         while (getline(file, line)) {
             stringstream ss(line);
-            getline(ss, matchId, '\t');
-            getline(ss, stage, '\t');
-            getline(ss, round, '\t');
-            getline(ss, p1Id, '\t');
-            getline(ss, p2Id, '\t');
-            getline(ss, scheduledTime, '\t');
-            getline(ss, matchStatus, '\t');
-            getline(ss, courtId, '\t');
+            getline(ss, matchId, ',');
+            getline(ss, stage, ',');
+            getline(ss, round, ',');
+            getline(ss, p1Id, ',');
+            getline(ss, p2Id, ',');
+            getline(ss, scheduledTime, ',');
+            getline(ss, matchStatus, ',');
+            getline(ss, courtId, ',');
 
             // Check if the player is in a waiting match
             if ((p1Id == playerId || p2Id == playerId) && matchStatus == "waiting") {
@@ -180,14 +207,14 @@ void substitutePlayer(const string& playerId, const string& matchesFile, const s
 
         if (!getline(file, line)) break;
         stringstream ss(line);
-        getline(ss, matchId, '\t');
-        getline(ss, stage, '\t');
-        getline(ss, round, '\t');
-        getline(ss, p1Id, '\t');
-        getline(ss, p2Id, '\t');
-        getline(ss, scheduledTime, '\t');
-        getline(ss, matchStatus, '\t');
-        getline(ss, courtId, '\t');
+        getline(ss, matchId, ',');
+        getline(ss, stage, ',');
+        getline(ss, round, ',');
+        getline(ss, p1Id, ',');
+        getline(ss, p2Id, ',');
+        getline(ss, scheduledTime, ',');
+        getline(ss, matchStatus, ',');
+        getline(ss, courtId, ',');
 
         // Check if the player needs substitution
         if ((p1Id == playerId || p2Id == playerId) && matchStatus == "waiting") {
@@ -211,9 +238,9 @@ void substitutePlayer(const string& playerId, const string& matchesFile, const s
             file.seekp(lastPos);
 
             // Overwrite the line with the updated player ID
-            file << matchId << '\t' << stage << '\t' << round << '\t' 
-                << p1Id << '\t' << p2Id << '\t' << scheduledTime << '\t' 
-                << matchStatus << '\t' << courtId << '\n';
+            file << matchId << ',' << stage << ',' << round << ','
+                << p1Id << ',' << p2Id << ',' << scheduledTime << ','
+                << matchStatus << ',' << courtId << '\n';
 
             file.flush(); // Ensure the changes are written
             cout << "Substituted " << substituteName << " (ID: " << substituteId << ") in match " << matchId << ".\n";
@@ -225,36 +252,12 @@ void substitutePlayer(const string& playerId, const string& matchesFile, const s
 }
 
 /**
- * Read players from a file
- * @param filename the name of the file
- * @return a map of players
- */
-map<string, string> readPlayersFromFile(const string& filename) {
-    ifstream file(filename);
-    map<string, string> players;
-    if (!file) return players;
-
-    // Read players from the file
-    cout << "Available Players:\n";
-    string line;
-    while (getline(file, line)) {
-        stringstream ss(line);
-        string playerId, name;
-        getline(ss, playerId, ',');
-        getline(ss, name, ',');
-        players[name] = playerId;
-    }
-    file.close();
-    return players;
-}
-
-/**
  * Print available players
  * @param players the map of players
  */
 void printAvailablePlayers(const map<string, string>& players) {
     cout << "Available Players:\n";
-    for (const auo& [name, id] :players) {
+    for (const auto& [name, id] :players) {
         cout << "Player ID: " << id << ", Name: " << name << endl;
     }
 }
@@ -263,7 +266,7 @@ void printAvailablePlayers(const map<string, string>& players) {
  * Handle user input for player withdrawals
  * @param withdrawals the player withdrawals object
  */
-void handleUserInput(PlayerWithdrawals &withdrawals) {
+void withdrawPlayer(PlayerWithdrawals &withdrawals) {
     // Read players from file
     map<string, string> players = readPlayersFromFile("Players.txt");
     printAvailablePlayers(players);
@@ -287,11 +290,263 @@ void handleUserInput(PlayerWithdrawals &withdrawals) {
 
     withdrawals.withdraw(playerId, name, reason);
     withdrawals.displayWithdrawals();
-    checkAndSubstitutePlayer(playerId, "Matches.txt");
+    if (checkUpcomingMatch(playerId, "Matches.txt"))
+    {
+        substitutePlayer(playerId, "Matches.txt", "Players.txt");
+    }
 }
 
+/**
+ * ----------------------------------------
+ * Create a new player
+ * ----------------------------------------
+ */
+void createNewPlayer() {
+    struct newPlayer {
+        string name;
+        string nationality;
+        string ranking;
+        string gender;
+        string stage;
+    };
+
+    newPlayer Player;
+    cin.ignore();
+    cout << "Add Player" << endl;
+    cout << "Enter player name: ";
+    cin >> Player.name;
+    cout << "Enter player nationality: ";
+    cin >> Player.nationality;
+    cout << "Enter player ranking: ";
+    cin >> Player.ranking;
+    cout << "Enter player gender: ";
+    cin >> Player.gender;
+    cout << "Enter player stage: ";
+    cin >> Player.stage;
+
+    string playerId = generateId("Players.txt", "APUTCP", 3);
+
+    ofstream file("Players.txt", ios::app);
+    if (!file.is_open()) return;
+    else {
+        file << playerId << ","
+            << Player.name << ","
+            << Player.nationality << ","
+            << Player.ranking << ","
+            << Player.gender << ","
+            << Player.stage << endl;
+        file.close();
+        cout << "Player added successfully." << endl;
+    }
+}
+
+/**
+ * ----------------------------------------
+ * Track Player performance
+ * ----------------------------------------
+ */
+struct MatchHistory {
+    string matchId;
+    string stage;
+    string p1Id;
+    string p2Id;
+    string setScores;
+    string matchedTime;
+    string duration;
+    MatchHistory* next;
+};
+
+/**
+ * Function to read player names as keys (Name -> ID)
+ * @param filename the name of the file
+ */
+map<string, string> readPlayersByName(const string& filename) {
+    ifstream file(filename);
+    map<string, string> players;
+    if (!file) return players;
+
+    string line;
+    while (getline(file, line)) {
+        stringstream ss(line);
+        string playerId, name;
+        getline(ss, playerId, ',');
+        getline(ss, name, ',');
+        players[name] = playerId;  // Name as key, ID as value
+    }
+    file.close();
+    return players;
+}
+
+/**
+ * Function to read player IDs as keys (ID -> Name)
+ * @param filename the name of the file
+ */
+map<string, string> readPlayersByID(const string& filename) {
+    ifstream file(filename);
+    map<string, string> players;
+    if (!file) return players;
+
+    string line;
+    while (getline(file, line)) {
+        stringstream ss(line);
+        string playerId, name;
+        getline(ss, playerId, ',');
+        getline(ss, name, ',');
+        players[playerId] = name;  // ID as key, Name as value
+    }
+    file.close();
+    return players;
+}
+
+/**
+ * Function to insert a match into a linked list
+ * @param head the head of the linked list
+ * @param newMatch the new match to insert
+ */
+void insertMatch(MatchHistory*& head, const MatchHistory& newMatch) {
+    MatchHistory* newNode = new MatchHistory(newMatch);
+    newNode -> next = nullptr;
+
+    if (!head) {
+        head = newNode;
+        return;
+    }
+
+    MatchHistory* temp = head;
+    while (temp -> next)
+        temp = temp -> next;
+
+    temp -> next = newNode;
+}
+
+/**
+ * Function to read matches from file
+ * @param filename the name of the file
+ * @param head the head of the linked list
+ */
+void readMatches(const string& filename, MatchHistory*& head) {
+    ifstream file(filename);
+    if (!file) {
+        cerr << "Error opening file!" << endl;
+        return;
+    }
+
+    string line;
+    while (getline(file, line)) {
+        stringstream ss(line);
+        string historyId; // Skipping the first column
+        MatchHistory match;
+
+        getline(ss, historyId, ',');
+        getline(ss, match.matchId, ',');
+        getline(ss, match.stage, ',');
+        getline(ss, match.p1Id, ',');
+        getline(ss, match.p2Id, ',');
+        getline(ss, match.setScores, ',');
+        getline(ss, match.matchedTime, ',');
+        getline(ss, match.duration, ',');
+
+        insertMatch(head, match);
+    }
+    file.close();
+}
+
+/**
+ * Function to free allocated memory
+ * @param head the head of the linked list
+ */
+void freeMatches(MatchHistory*& head) {
+    while (head) {
+        MatchHistory* temp = head;
+        head = head -> next;
+        delete temp;
+    }
+}
+
+/**
+ * Function to track a player's performance
+ */
+void trackPlayerPerformance() {
+    string playerId;
+    cout << "Enter player ID: ";
+    cin >> playerId;
+
+    map<string, string> players = readPlayersByID("Players.txt");
+
+    if (players.find(playerId) == players.end()) {
+        cout << "Player not found" << endl;
+        return;
+    }
+
+    MatchHistory* head = nullptr;
+    readMatches("MatchHistory.txt", head);
+
+    cout << "Player ID: " << playerId << endl;
+    cout << "Player Name: " << players[playerId] << endl;
+    cout << "Performance: " << endl;
+
+    int matchesPlayed = 0, wins = 0, losses = 0;
+    MatchHistory* temp = head;
+
+    while (temp) {
+        if (temp -> p1Id == playerId || temp -> p2Id == playerId) {
+            matchesPlayed++;
+            cout << "MatchID: " << temp->matchId << endl;
+            cout << "Scores: " << temp->setScores << endl;
+
+            // Determine win/loss from SetScores
+            int p1Score = temp -> setScores[0] - '0'; // First digit
+            int p2Score = temp -> setScores[2] - '0'; // Third digit
+
+            if ((temp -> p1Id == playerId && p1Score > p2Score) ||
+                (temp -> p2Id == playerId && p2Score > p1Score)) {
+                wins++;
+            } else {
+                losses++;
+            }
+        }
+        temp = temp -> next;
+    }
+
+    cout << "Matches Played: " << matchesPlayed << endl;
+    cout << "Wins: " << wins << endl;
+    cout << "Losses: " << losses << endl;
+
+    freeMatches(head);
+}
+
+/**
+ * --------------
+ * Main Function
+ * --------------
+ */
 int main() {
     PlayerWithdrawals playerWithdrawals;
-    handleUserInput(playerWithdrawals);
+
+    do {
+        int choice;
+        cout << "Menu" << endl;
+        cout << "1. Withdraw a player" << endl;
+        cout << "2. Add a new player" << endl;
+        cout << "3. Track player performance" << endl;
+        cout << "Enter Choice: ";
+        cin >> choice;
+        switch (choice) {
+            case 1:
+                withdrawPlayer(playerWithdrawals);
+                break;
+            case 2:
+                createNewPlayer();
+                break;
+            case 3:
+                // Track Player performance
+                trackPlayerPerformance();
+                break;
+            default:
+                cout << "Invalid choice. Please try again." << endl;
+                break;
+        }
+    } while (true);
+
     return 0;
 }
