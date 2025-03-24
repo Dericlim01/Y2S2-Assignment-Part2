@@ -385,23 +385,30 @@ class TournamentScheduler {
          * Constructor to initialize the tournament scheduler
          */
         TournamentScheduler() {
-            courts = new Courts[3]{
-                {"C001", "Center", 1500, 2},
-                {"C002", "Championship", 1000, 1},
-                {"C003", "Progression", 750, 1}
-            };
-            courtsCount = 3;
-
+            // Initialize court data from file instead of hardcoding
+            courts = nullptr;
+            courtsCount = 0;
+            if (!loadCourtsFromFile(courts, courtsCount)) {
+                // Fallback to hardcoded values if file operations fail
+                courts = new Courts[3]{
+                    {"C001", "Center", 1500, 2},
+                    {"C002", "Championship", 1000, 1},
+                    {"C003", "Progression", 750, 1}
+                };
+                courtsCount = 3;
+                cout << "Using default hardcoded court values." << endl;
+            }
+        
             matches = nullptr;
             matchesCount = 0;
             matchesCapacity = 0;
-
+        
             players = nullptr;
             playersCount = 0;
             playersCapacity = 0;
             
             courtSchedules = nullptr;
-
+        
             try {
                 loadPlayers();
                 loadMatches();
@@ -427,6 +434,108 @@ class TournamentScheduler {
             delete[] matches;
             delete[] players;
             delete[] courtSchedules;
+        }
+        bool createCourtFile() {
+            ofstream courtFile("Court.txt");
+            if (!courtFile) {
+                cerr << "Error: Could not create Court.txt file." << endl;
+                return false;
+            }
+            
+            // Write default court data
+            courtFile << "C001,Center,1500,2" << endl;
+            courtFile << "C002,Championship,1000,1" << endl;
+            courtFile << "C003,Progression,750,1" << endl;
+            
+            courtFile.close();
+            cout << "Court.txt file created successfully with default values." << endl;
+            return true;
+        }
+        
+        /**
+         * Load court data from Court.txt file
+         * @param courts Pointer to courts array
+         * @param courtsCount Reference to court count
+         * @return True if successful, false otherwise
+         */
+        bool loadCourtsFromFile(Courts* &courts, int &courtsCount) {
+            ifstream courtFile("Court.txt");
+            if (!courtFile) {
+                cout << "Court.txt not found. Creating default file..." << endl;
+                if (!createCourtFile()) {
+                    return false;
+                }
+                courtFile.open("Court.txt");
+                if (!courtFile) {
+                    cerr << "Error: Could not open Court.txt after creation." << endl;
+                    return false;
+                }
+            }
+        
+            // Count the number of courts in the file
+            int count = 0;
+            string line;
+            while (getline(courtFile, line)) {
+                if (!line.empty()) {
+                    count++;
+                }
+            }
+            
+            // Reset file to beginning
+            courtFile.clear();
+            courtFile.seekg(0, ios::beg);
+            
+            // Allocate courts array
+            courts = new Courts[count];
+            courtsCount = count;
+            
+            // Read court data
+            int index = 0;
+            while (getline(courtFile, line)) {
+                if (line.empty()) continue;
+                
+                stringstream ss(line);
+                getline(ss, courts[index].courtID, ',');
+                getline(ss, courts[index].courtType, ',');
+                
+                string capacityStr, maxMatchesStr;
+                getline(ss, capacityStr, ',');
+                getline(ss, maxMatchesStr, ',');
+                
+                courts[index].capacity = stoi(capacityStr);
+                courts[index].maxConcurrentMatches = stoi(maxMatchesStr);
+                
+                index++;
+            }
+            
+            courtFile.close();
+            cout << "Loaded " << courtsCount << " courts from Court.txt." << endl;
+            return true;
+        }
+        
+        /**
+         * Save court data to Court.txt file
+         * @param courts Pointer to courts array
+         * @param courtsCount Number of courts
+         * @return True if successful, false otherwise
+         */
+        bool saveCourtsToFile(Courts* courts, int courtsCount) {
+            ofstream courtFile("Court.txt");
+            if (!courtFile) {
+                cerr << "Error: Could not open Court.txt for writing." << endl;
+                return false;
+            }
+            
+            for (int i = 0; i < courtsCount; i++) {
+                courtFile << courts[i].courtID << ","
+                          << courts[i].courtType << ","
+                          << courts[i].capacity << ","
+                          << courts[i].maxConcurrentMatches << endl;
+            }
+            
+            courtFile.close();
+            cout << "Court data saved to Court.txt." << endl;
+            return true;
         }
 
         /**
