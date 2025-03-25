@@ -17,6 +17,41 @@
 using namespace std;
 
 /**
+ * Public
+ */
+/**
+ * Generic function to generate a new ID.
+ * @param filename The file to read existing IDs from.
+ * @param prefix The prefix for the ID ("APUTCP" or "W").
+ * @param width The numeric part width (3 for "001").
+ * @param defaultStart The starting number if no ID is found.
+ * @return A new auto-incremented ID.
+ */
+string generateId(const string& filename, const string& prefix, int width, int defaultStart = 1) {
+    ifstream file(filename);
+    string lastId = "";
+    string line;
+    while(getline(file, line)) {
+        if(line.empty()) continue;
+        // Assume the ID is the first field (separated by a comma)
+        stringstream ss(line);
+        getline(ss, lastId, ',');
+    }
+    file.close();
+    
+    int num = defaultStart;
+    if(!lastId.empty()){
+        // Extract numeric part from lastId assuming it starts with prefix.
+        string numStr = lastId.substr(prefix.size());
+        num = stoi(numStr) + 1;
+    }
+    
+    stringstream ss;
+    ss << prefix << setfill('0') << setw(width) << num;
+    return ss.str();
+}
+
+/**
  * ----------------------------------------------------------------------------------------------------------------
  * -------------------------------- Tournament Scheduling and Player Progression ----------------------------------
  * ----------------------------------------------------------------------------------------------------------------
@@ -528,9 +563,9 @@ class TournamentScheduler {
             
             for (int i = 0; i < courtsCount; i++) {
                 courtFile << courts[i].courtID << ","
-                          << courts[i].courtType << ","
-                          << courts[i].capacity << ","
-                          << courts[i].maxConcurrentMatches << endl;
+                        << courts[i].courtType << ","
+                        << courts[i].capacity << ","
+                        << courts[i].maxConcurrentMatches << endl;
             }
             
             courtFile.close();
@@ -636,7 +671,7 @@ class TournamentScheduler {
                 int selectedIndex;
 
                 cout << "\nSelect opponent by number (1-" << availableCount << "): ";
-                getline(cin, selection);
+                cin >> selection;
 
                 try {
                     selectedIndex = stoi(selection) - 1;
@@ -1024,7 +1059,7 @@ void tournamentScheduleAndPlayer() {
         switch(choice) {
             case 1: {
                 cout << "Enter Player 1 ID: ";
-                getline(cin, p1ID);
+                cin >> p1ID;
                 scheduler.scheduleMatch(p1ID);
                 break;
             }
@@ -1036,7 +1071,7 @@ void tournamentScheduleAndPlayer() {
                 break;
             case 4: {
                 cout << "Enter Player ID to advance: ";
-                getline(cin, p1ID);
+                cin >> p1ID;
                 scheduler.advancePlayerStage(p1ID);
                 break;
             }
@@ -1359,7 +1394,11 @@ Match* readMatchesFromFile(int& matchCount) {
     }
     inFile.close();
 
-    return nullptr; // Return nullptr if no valid matches found
+    if (matchCount == 0) {
+        return nullptr; // Return nullptr if no valid matches found
+    }
+
+    return head; // Return the head of the linked list
 }
 
 // Structure for Sales Records
@@ -1440,13 +1479,29 @@ void viewSalesRecord() {
         cout << "No sales records found.\n";
         return;
     }
-    cout << "\n=====================================Sales Records:=========================================\n"; // Display the header
-    cout << "SalesID | SpectatorName | TicketsQuantity | TicketType | TicketID | PurchasedDateTime | Status\n";
-    cout << "==============================================================================================\n";
+    cout << "\n================================= Sales Records =====================================\n";
+    cout << left << setw(10) << "SalesID" << setw(15) << "Spectator Name"
+        << setw(10) << "Quantity" << setw(12) << "Ticket Type"
+        << setw(10) << "Ticket ID" << setw(22) << "Purchase Date & Time"
+        << setw(12) << "Status" << "\n";
+    cout << "=====================================================================================\n";
     string line;
     // Read and display each line
     while (getline(inFile, line)) {
-        cout << line << "\n";
+        stringstream ss(line);
+        string salesID, name, quantity, ticketType, ticketID, purchaseDateTime, status;
+        getline(ss, salesID, ',');
+        getline(ss, name, ',');
+        getline(ss, quantity, ',');
+        getline(ss, ticketType, ',');
+        getline(ss, ticketID, ',');
+        getline(ss, purchaseDateTime, ',');
+        getline(ss, status, ',');
+
+        cout << left << setw(10) << salesID << setw(15) << name
+            << setw(10) << quantity << setw(12) << ticketType
+            << setw(10) << ticketID << setw(22) << purchaseDateTime
+            << setw(12) << status << "\n";
     }
     inFile.close(); // Close Sales.txt
 }
@@ -1477,15 +1532,14 @@ void addSpectatorToQueue(int& ticketCounter) {
     Match* matches = readMatchesFromFile(matchCount); // Read the matches from the file
 
     // Check if there is no match available
-    if (matchCount == 0) {
+    if (matchCount == 0 || matches == nullptr) {
         cout << "No matches available for ticket purchase at this time.\n";
         return;
     }
 
     // Variables to store spectator details
-    string name, ticketType, matchID, dateTime;
+    string name, ticketType, matchID, dateTime, courtID;
     int seatsQuantity;
-    string courtID;
 
     // Get the spectator name
     cout << "Enter spectator name: ";
@@ -1520,30 +1574,49 @@ void addSpectatorToQueue(int& ticketCounter) {
 
     // Variable to store the user match selection
     int matchChoice;
-    cout << "Enter your choice (1-" << matchCount << "): ";
-    cin >> matchChoice;
     // Validate the match choice
-    while (matchChoice < 1 || matchChoice > matchCount) {
-        cout << "Invalid choice! Enter again (1-" << matchCount << "): ";
-        cin >> matchChoice;
+    if (matchCount == 1) {
+        matchChoice = 1;
+    } else {
+        do {
+            cout << "Enter your choice (1-" << matchCount << "): ";
+            cin >> matchChoice;
+            if (cin.fail()) {
+                cin.clear();
+                cin.ignore(numeric_limits<streamsize>::max(), '\n');
+                matchChoice = -1;
+            }
+            if (matchChoice < 1 || matchChoice > matchCount) {
+                cout << "Invalid choice.\n";
+            }
+        } while (matchChoice < 1 || matchChoice > matchCount);
     }
 
     // Reset to the head of the match list
     current = matches;
     // Move to the selected match
     for (int i = 1; i < matchChoice; i++) {
-        current = current->next;
+        if (current -> next == nullptr) {
+            cout << "Error: Match selection out of range.\n";
+            return;
+        }
+        current = current -> next;
     }
-    matchID = current -> matchID; // Set the matchID
-    courtID = current -> courtID; // Set the courtID
-    dateTime = current -> dateTime; // Set the date and time
+
+    if (current != nullptr) {
+        matchID = current -> matchID; // Set the matchID
+        courtID = current -> courtID; // Set the courtID
+        dateTime = current -> dateTime; // Set the date and time
+    } else {
+        cout << "Error: Unable to retrieve match details.\n";
+        return;
+    }
 
     cout << "Enter number of tickets to purchase: ";
     cin >> seatsQuantity;
     // Validate the number of tickets
     while (seatsQuantity <= 0) {
         cout << "Invalid quantity! Enter a positive number: ";
-        cin >> seatsQuantity;
     }
 
     // Create a new spectator with the provided details
@@ -1988,38 +2061,6 @@ void ticketSales() {
  * ----------------------------------------- Handling Player Withdrawal -------------------------------------------
  * ----------------------------------------------------------------------------------------------------------------
  */
-/**
- * Generic function to generate a new ID.
- * @param filename The file to read existing IDs from.
- * @param prefix The prefix for the ID ("APUTCP" or "W").
- * @param width The numeric part width (3 for "001").
- * @param defaultStart The starting number if no ID is found.
- * @return A new auto-incremented ID.
- */
-string generateId(const string& filename, const string& prefix, int width, int defaultStart = 1) {
-    ifstream file(filename);
-    string lastId = "";
-    string line;
-    while(getline(file, line)) {
-        if(line.empty()) continue;
-        // Assume the ID is the first field (separated by a comma)
-        stringstream ss(line);
-        getline(ss, lastId, ',');
-    }
-    file.close();
-    
-    int num = defaultStart;
-    if(!lastId.empty()){
-        // Extract numeric part from lastId assuming it starts with prefix.
-        string numStr = lastId.substr(prefix.size());
-        num = stoi(numStr) + 1;
-    }
-    
-    stringstream ss;
-    ss << prefix << setfill('0') << setw(width) << num;
-    return ss.str();
-}
-
 // Structure for a Player
 struct Player {
     string withdrawalId;
@@ -2139,6 +2180,7 @@ bool checkUpcomingMatch(const string& playerId, const string& filename) {
         getline(ss, matchStatus, ',');
         getline(ss, courtId, ',');
 
+        // Check if the player has an upcoming match
         if ((p1Id == playerId || p2Id == playerId) && matchStatus.compare("waiting") == 0) {
             cout << "\n Match Found! Player needs substitution.\n";
             cout << "================================================================================\n";
@@ -2159,6 +2201,40 @@ bool checkUpcomingMatch(const string& playerId, const string& filename) {
 }
 
 /**
+ * Read players from a file along with their stage.
+ * The Players.txt file is assumed to have six comma-separated fields:
+ * playerId, name, nationality, ranking, gender, stage.
+ * @param filename the name of the file
+ * @return a map from player name to a pair {playerId, stage}
+ */
+map<string, pair<string, string>> readPlayersWithStage(const string& filename) {
+    ifstream file(filename);
+    map<string, pair<string, string>> players;
+    if (!file) return players;
+    
+    string line;
+    while(getline(file, line)) {
+        stringstream ss(line);
+        string playerId, name, nationality, ranking, gender, stage;
+        getline(ss, playerId, ',');
+        getline(ss, name, ',');
+        getline(ss, nationality, ',');  // skip nationality
+        getline(ss, ranking, ',');      // skip ranking
+        getline(ss, gender, ',');       // skip gender
+        getline(ss, stage, ',');        // read stage
+        players[name] = make_pair(playerId, stage);
+    }
+    file.close();
+    return players;
+}
+
+/**
+ * Substitute a player using a player name lookup from Players.txt
+ * @param playerId The ID of the withdrawn player.
+ * @param matchesFile The matches file.
+ * @param playersFile The players file.
+ */
+/**
  * Substitute a player using a player name lookup from Players.txt
  * @param playerId The ID of the withdrawn player.
  * @param matchesFile The matches file.
@@ -2172,8 +2248,8 @@ void substitutePlayer(const string& playerId, const string& matchesFile, const s
     }
 
     // Load players from Players.txt
-    map<string, string> players = readPlayersFromFile(playersFile);
-    if (players.empty()) {
+    auto playersWithStage = readPlayersWithStage(playersFile);
+    if (playersWithStage.empty()) {
         cout << "Error reading player list.\n";
         return;
     }
@@ -2198,25 +2274,42 @@ void substitutePlayer(const string& playerId, const string& matchesFile, const s
 
         // Check if the player needs substitution
         if ((p1Id == playerId || p2Id == playerId) && matchStatus == "waiting") {
-            string substituteName;
-            string substituteId;
+            cout << "\nMatch Found: " << matchId << endl;
+            cout << "Stage" << stage << endl;
 
+            map<string, string> availablePlayers;
+            for (const auto& p : playersWithStage) {
+                // p.first is player name, p.second.first is playerId, p.second.second is stage.
+                if (p.second.second == stage && p.second.first != p1Id && p.second.first != p2Id)
+                    availablePlayers[p.first] = p.second.first;
+            }
+
+            if (availablePlayers.empty()) {
+                cout << "No available substitute players in stage " << stage << ".\n";
+                continue;
+            }
+
+            // Display available substitute players.
+            cout << "Available substitute players in stage " << stage << ":\n";
+            cout << "----------------------------------------\n";
+            for (const auto& p : availablePlayers) {
+                cout << "Name: " << p.first << ", Player ID: " << p.second << "\n";
+            }
+            cout << "----------------------------------------\n";
+
+            string substituteName, substituteId;
             while (true) {
                 cout << "Please enter a substitute player name for match " << matchId << ": ";
                 getline(cin, substituteName);
 
                 // Find the substitute's player ID
-                auto it = players.find(substituteName);
-                if (it == players.end()) {
-                    cout << "Player not found in Players.txt. Substitution failed.\n";
+                auto it = availablePlayers.find(substituteName);
+                if (it == availablePlayers.end()) {
+                    cout << "Player not found among available substitutes. Try again.\n";
                     continue;
                 }
 
                 substituteId = it -> second;
-                if (substituteId == p1Id || substituteId == p2Id) {
-                    cout << "Invalid Player, Pls choose another player.\n";
-                    continue;
-                }
                 break;
             }
 
@@ -2233,7 +2326,7 @@ void substitutePlayer(const string& playerId, const string& matchesFile, const s
                 << matchStatus << ',' << courtId << '\n';
 
             file.flush(); // Ensure the changes are written
-            cout << "Substituted " << substituteName << " (ID: " << substituteId << ") in match " << matchId << ".\n";
+            cout << "Substituted with " << substituteName << " (ID: " << substituteId << ") in match " << matchId << ".\n";
         }
     }
 

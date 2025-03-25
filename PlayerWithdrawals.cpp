@@ -183,6 +183,34 @@ bool checkUpcomingMatch(const string& playerId, const string& filename) {
 }
 
 /**
+ * Read players from a file along with their stage.
+ * The Players.txt file is assumed to have six comma-separated fields:
+ * playerId, name, nationality, ranking, gender, stage.
+ * @param filename the name of the file
+ * @return a map from player name to a pair {playerId, stage}
+ */
+map<string, pair<string, string>> readPlayersWithStage(const string& filename) {
+    ifstream file(filename);
+    map<string, pair<string, string>> players;
+    if (!file) return players;
+    
+    string line;
+    while(getline(file, line)) {
+        stringstream ss(line);
+        string playerId, name, nationality, ranking, gender, stage;
+        getline(ss, playerId, ',');
+        getline(ss, name, ',');
+        getline(ss, nationality, ',');  // skip nationality
+        getline(ss, ranking, ',');      // skip ranking
+        getline(ss, gender, ',');       // skip gender
+        getline(ss, stage, ',');        // read stage
+        players[name] = make_pair(playerId, stage);
+    }
+    file.close();
+    return players;
+}
+
+/**
  * Substitute a player using a player name lookup from Players.txt
  * @param playerId The ID of the withdrawn player.
  * @param matchesFile The matches file.
@@ -196,8 +224,8 @@ void substitutePlayer(const string& playerId, const string& matchesFile, const s
     }
 
     // Load players from Players.txt
-    map<string, string> players = readPlayersFromFile(playersFile);
-    if (players.empty()) {
+    auto playersWithStage = readPlayersWithStage(playersFile);
+    if (playersWithStage.empty()) {
         cout << "Error reading player list.\n";
         return;
     }
@@ -222,25 +250,42 @@ void substitutePlayer(const string& playerId, const string& matchesFile, const s
 
         // Check if the player needs substitution
         if ((p1Id == playerId || p2Id == playerId) && matchStatus == "waiting") {
-            string substituteName;
-            string substituteId;
+            cout << "\nMatch Found: " << matchId << endl;
+            cout << "Stage" << stage << endl;
 
+            map<string, string> availablePlayers;
+            for (const auto& p : playersWithStage) {
+                // p.first is player name, p.second.first is playerId, p.second.second is stage.
+                if (p.second.second == stage && p.second.first != p1Id && p.second.first != p2Id)
+                    availablePlayers[p.first] = p.second.first;
+            }
+
+            if (availablePlayers.empty()) {
+                cout << "No available substitute players in stage " << stage << ".\n";
+                continue;
+            }
+
+            // Display available substitute players.
+            cout << "Available substitute players in stage " << stage << ":\n";
+            cout << "----------------------------------------\n";
+            for (const auto& p : availablePlayers) {
+                cout << "Name: " << p.first << ", Player ID: " << p.second << "\n";
+            }
+            cout << "----------------------------------------\n";
+
+            string substituteName, substituteId;
             while (true) {
                 cout << "Please enter a substitute player name for match " << matchId << ": ";
                 getline(cin, substituteName);
 
                 // Find the substitute's player ID
-                auto it = players.find(substituteName);
-                if (it == players.end()) {
-                    cout << "Player not found in Players.txt. Substitution failed.\n";
+                auto it = availablePlayers.find(substituteName);
+                if (it == availablePlayers.end()) {
+                    cout << "Player not found among available substitutes. Try again.\n";
                     continue;
                 }
 
                 substituteId = it -> second;
-                if (substituteId == p1Id || substituteId == p2Id) {
-                    cout << "Invalid Player, Pls choose another player.\n";
-                    continue;
-                }
                 break;
             }
 
@@ -257,7 +302,7 @@ void substitutePlayer(const string& playerId, const string& matchesFile, const s
                 << matchStatus << ',' << courtId << '\n';
 
             file.flush(); // Ensure the changes are written
-            cout << "Substituted " << substituteName << " (ID: " << substituteId << ") in match " << matchId << ".\n";
+            cout << "Substituted with " << substituteName << " (ID: " << substituteId << ") in match " << matchId << ".\n";
         }
     }
 
